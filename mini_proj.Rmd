@@ -1,0 +1,239 @@
+---
+title: 95-868 Mini project
+author: Jianfu Zhang
+output: 
+  html_document:
+    fig_width: 7
+    fig_height: 5
+---
+
+#### Instructions -- Make Sure You Read This!
+
+**Preliminaries**
+
+* Submit this Rmd file on canvas. Don't submit additional files. 
+* Add your name in the header of this file (I might print the HTML or PDF output to read)
+
+**Main Instructions**
+
+1. Code should be clearly commented. Plots should be easy to follow. At a minimum, this means they should properly sized and labeled. (You can change the figure sizes if you want). Mitigate overplotting whenever possible. Use transforms when appropriate.
+
+2. You should only use R libraries that we have used in class. 
+
+3. I have made the datasets large enough so that you should not need to use coplots, instead you can use facets in `ggplot2`.
+
+4. **Important:** You may be asked to identify whether a relationship or interaction exists in the data. In this case, I want you to convince me of your answer by **visualizing the data**. Not by fitting a model. 
+
+Specifically, if you just run a variable selection method and tell me what the method returns, then I won't be convinced. This is because we have seen that these methods can give incorrect answers. So you are free to use models and methods as a guide in your search, but in order to convince me you will also need to show me a visualization.
+
+5. You don't need to show me all of your preliminary work, or every step in your search for the correct answer. Your task is to show me a visualization (or more than one) that convinces me that you are correct, and then explain to me what I should be looking for and why. I may deduct even points if you include too much unnecessary material.
+
+6. You need to explain what I should be looking for in each of your plots, and why you are including them. Your writing should be clear, to the point, and not too long. You can assume that the audience is already familiar with the basics of the dataset, and is really just interested in knowing two things: what are your findings, and why should I believe them? 
+
+7. Do not expect me to help you on this mini-project. This is your chance to demonstrate what you have learned in this course. I reserve the right to not answer any question except for the most basic of clarifications. 
+
+```{r}
+# you can add more libraries, but only those we have presented in class
+library(plyr) # change to dplyr if you want
+library(ggplot2)
+library(splines)
+
+# load the data file 
+# (don't change this line, instead put the data file in the same directory 
+# as this markdown file)
+load('data_miniproject.rda')
+
+# set random seed so that grader sees same result as you
+set.seed(1)
+
+# here is a function to shuffle two vectors and return a data frame. 
+# we will use it to make a function that returns a permutation lineup test.
+
+shuffle_y = function(x, y){
+  y = sample(y)
+  return(data.frame(x = x, y = y))
+}
+
+# function: permutation.lineup.test
+# this function takes two vectors, and does a permutation
+# lineup test. It returns a list containing two objects:
+#   1. data: a data frame with the results you will need to plot the lineup test. 
+#            Using this data frame you should plot x vs y, and facet by .n
+#   2. true.index: this is the index of the subplot containing the original, 
+#                  non-permuted data.
+#
+
+permutation.lineup.test = function(x, y, num.plots=12){
+  # shuffe the data num.plots times (default is 12)
+  lineup.test = plyr::rdply(num.plots, shuffle_y(x = x, y = y))
+  # choose one at random to replace with the original data
+  random.index = ceiling(runif(1)*num.plots)
+  # remove that version
+  lineup.test = subset(lineup.test, .n != random.index)
+  # replace it with the original data
+  lineup.test = rbind(lineup.test, 
+                      data.frame(.n = random.index, 
+                                 x = x, y = y))
+  # return a list containing the data frame of shuffled vectors, and the
+  # index of the original data
+  return(list(data = lineup.test, true.index = random.index))
+}
+
+```
+
+
+
+#### Questions
+
+**Question 1a.** In the data set `prob1`, are `x1` and `x2` independent?
+
+```{r}
+# your code here
+#Draw the dot plot between x1 and log(x2).
+ggplot(data = prob1, mapping=aes(y = log(x2), x = x1)) +
+geom_point() + geom_smooth(method = 'lm', formula = y ~ ns(x, df = 2))
+#Do a permutation lineup test to randomly shuffle log(x2), then draw the dot plots.
+lineup.test = permutation.lineup.test(x = prob1$x1, y = log(prob1$x2), num.plots = 12)
+ggplot(data = lineup.test$data, mapping=aes(x=x, y=y)) +
+geom_point(size = 1) + facet_wrap('.n', nrow= 3) + labs(x = 'x1', y = 'x2', title = 'Lineup Tests with Random Permutations')
+```
+
+(Don't forget to describe what I should be looking for and why)
+
+ANS: I drawed the dot plot between x1 and log(x2) as well as a fitted line uder df = 2. We can easily found that x1 and log(x2) is positively related. As x1 increases, log(x2) increases. Their relationship is approximately linear. 
+
+Then I randomly permuted x2 for 12 times and drawed the dot plots again. The original data can be distinguished obviously from these plots. Therefore, 'x1' and 'x2' are not independent.
+
+**Question 1b.** In the data set `prob1`, are `x1` and `y` are conditionally independent (when conditioned on `x2`)?
+
+```{r}
+# your code here
+#Draw the dot plot between x2 and y.
+ggplot(data = prob1, mapping=aes(x=log(x2), y=log(y))) + geom_point() + labs(title = 'log(y) vs x2') + geom_smooth(method = 'lm', se = F)
+
+#Cut x1 into 9 groups.
+prob1$x1_cat = cut_number(prob1$x1, n = 9)
+#Retain column 'x2' and 'y' in prob1.
+no.group = subset(prob1, select = c('x2', 'y'))
+#Draw the dot plots between x2 and y when grouped by x1
+ggplot(data = prob1, mapping=aes(x=log(x2),y=log(y))) + facet_wrap('x1_cat', nrow = 3) + geom_point(data = no.group, color='grey', size=1) + geom_point(size=1) + labs(title = 'Grouped by x1') + geom_smooth(method = 'lm')
+```
+
+(Don't forget to describe what I should be looking for and why)
+
+ANS: 
+• In this case, we say x1 is conditionally independent of y when conditioned on x2.
+• Knowing x1 does not give you any information about y, if you already know x2.
+• Grouping by x1 doesn’t even change the intercept in the plots. It only changes the distribution of x2
+
+**Question 2.** The data frame `prob2` contains variables `x1, x2, x3`, and `y`. We want you to characterize the relationship between `y` and the `x` variables, as best as you can:
+
+
+* (part a) Do you think there are any interactions between the `x` variables? If so, describe them. Is there a three-way interaction? If so, describe it.
+* (part b) Does each `x` variable have a positive "effect" on `y`, negative effect on `y`, or no effect on `y`? (By effect we informally just mean associations.)
+* (part c) A linear regression of the form `y ~ x1 + x2 + x3` gives the following coefficients:
+
+```
+Call:
+lm(formula = y ~ x1 + x2 + x3, data = prob2)
+
+Coefficients:
+(Intercept)           x1           x2           x3  
+    -18.600        5.869       26.205       25.457 
+```
+
+(part c continued) This suggests that all three of the `x` variables have a positive association with `y`. Do your findings agree with this? If not, why do you think this linear regression is giving an incorrect characterization of the data?
+
+```{r}
+# your code here
+#part a
+#Cut x3 into 2 groups.
+prob2$x3_cat = cut_number(prob2$x3, n = 2)
+#Retain column 'x2' and 'y' in prob2.
+no.group = subset(prob2, select = c('x2', 'y'))
+#Draw the dot plots between x2 and y when grouped by x3
+ggplot(data = prob2, mapping=aes(x=x2,y=log(y))) + facet_wrap('x3_cat') + geom_point(data = no.group, color='grey', size=1) + geom_point(size=1) + labs(title = 'Grouped by x3') + labs(title = '2.1 Grouped by x3')+ geom_smooth(method = 'lm',formula = y ~ ns(x, df = 2))
+
+#Cut x3 into 2 groups.
+prob2$x3_cat = cut_number(prob2$x3, n = 2)
+#Retain column 'x2' and 'y' in prob2.
+no.group = subset(prob2, select = c('x1', 'y'))
+#Draw the dot plots between x2 and y when grouped by x3
+ggplot(data = prob2, mapping=aes(x=log(x1),y=log(y))) + facet_wrap('x3_cat') + geom_point(data = no.group, color='grey', size=1) + geom_point(size=1) + labs(title = 'Grouped by x3') + labs(title = '2.2 Grouped by x3')+ geom_smooth(method = 'lm',formula = y ~ ns(x, df = 2))
+
+#Cut x2 into 2 groups.
+prob2$x2_cat = cut_number(prob2$x2, n = 2)
+#Retain column 'x2' and 'y' in prob2.
+no.group = subset(prob2, select = c('x1', 'y'))
+#Draw the dot plots between x1 and y when grouped by x2
+ggplot(data = prob2, mapping=aes(x=log(x1),y=log(y))) + facet_wrap('x2_cat') + geom_point(data = no.group, color='grey', size=1) + geom_point(size=1) + labs(title = 'Grouped by x2') + labs(title = '2.3 Grouped by x2')+ geom_smooth(method = 'lm',formula = y ~ ns(x, df = 2))
+
+#Cut x1, x2, x3 into 4 groups respectively.
+prob2$x1_cat = cut_number(prob2$x1, n = 4)
+prob2$x2_cat = cut_number(prob2$x2, n = 4)
+prob2$x3_cat = cut_number(prob2$x3, n = 4)
+
+#Draw the dot plots between x1 and y when grouped by x2, x3
+ggplot(data = prob2, mapping=aes(x=log(x1),y=log(y))) + facet_grid(x3_cat ~ x2_cat) + geom_point() + geom_point(size=1) + labs(title = '2.4 Grouped by x2, x3')+ geom_smooth(method = 'lm',formula = y ~ ns(x, df = 1))
+#Draw the dot plots between x2 and y when grouped by x1, x3
+ggplot(data = prob2, mapping=aes(x=x2,y=log(y))) + facet_grid(x1_cat ~ x3_cat) + geom_point() + geom_point(size=1) + labs(title = '2.5 Grouped by x1, x3')+ geom_smooth(method = 'lm',formula = y ~ ns(x, df = 1))
+#Draw the dot plots between x2 and y when grouped by x1, x3
+ggplot(data = prob2, mapping=aes(x=x3,y=log(y))) + facet_grid(x2_cat ~ x1_cat) + geom_point() + geom_point(size=1) + labs(title = '2.6 Grouped by x1, x2')+ geom_smooth(method = 'lm',formula = y ~ ns(x, df = 1))
+
+```
+(Don't forget to describe what I should be looking for and why. Also, feel free to separate this problem into multiple code sections, since it is longer than the others.)
+
+**part a**
+
+ANS: 
+From Graph '2.1 Grouped by x3' we can see that when x3 is low, x2 may only has a small effect on y. When x3 is high, x2 might have a bigger effect on y. So there are interactions between x2 and x3. 
+
+From Graph '2.2 Grouped by x3' we can see that there is no obvious difference between the effects of x1 over y when x3 is low or high. So I am not sure if there are any interactions between x1 and x3.
+
+From Graph '2.3 Grouped by x2' we can see that when x2 is low, x1 may only has a small effect on y. When x1 is high, x2 might have a bigger effect on y. So there are interactions between x1 and x2.
+
+In Graph '2.4 Grouped by x2, x3', x3 lies in vertical axis, x2 lies in horizontal axis. The slope of the fitted line increases horizontally, but remains almost the same vertically. So we can see that when x1 only has interaction with x2, but does not have interaction with x3.
+
+In Graph '2.5 Grouped by x1, x3', x1 lies in vertical axis, x3 lies in horizontal axis. The slope of the fitted line increases vertically, but remains almost the same horizontally. So we can see that when x2 only has interaction with x1, but does not have interaction with x3.
+
+In Graph '2.6 Grouped by x1, x2', x1 lies in vertical axis, x2 lies in horizontal axis. We can see that the effect of x3 over y become obvious only when both x1 and x2 are large.
+
+So there may be a three-way interaction.
+
+**part b**
+
+ANS: 
+
+From Graph '2.4 Grouped by x2, x3' we can see that in each dot plot, given x2 and x3, x1 has a positive effect on y. But such effect become more obvious when x2 is larger.
+
+From Graph '2.5 Grouped by x1, x3' we can see that in each dot plot, given x1 and x3, x2 has a positive effect on y. But such effect become more obvious when x1 is larger.
+
+From Graph '2.6 Grouped by x1, x2' we can see that in each dot plot, given x1 and x2, x3 has a positive effect on y. But such effect become more obvious when both x1 and x2 are large.
+
+**part c**
+
+ANS: 
+
+No, my findings do not agree with this. For example, x3 does not seem to have a positive effect on y when x1 and x2 are small. This is probably because the linear regression neglects the interactions between x1, x2 and x3.
+
+**Question 3.** In the data set `prob3`, are `x1` and `x2` independent? 
+
+```{r}
+# your code here
+#Draw the dot plot between x1 and log(x2)
+ggplot(data = prob3, mapping=aes(y = log(x2), x = x1)) +
+geom_point(size = 0.5)
+
+#Do a permutation lineup test to randomly shuffle log(x2), then draw the dot plots.
+lineup.test = permutation.lineup.test(x = prob3$x1, y = log(prob3$x2), num.plots = 4)
+ggplot(data = lineup.test$data, mapping=aes(x=x, y=y))  +
+geom_point(size = 0.01) + facet_wrap('.n', nrow= 3) + labs(x = 'x1', y = 'log(x2)', title = 'Lineup Tests with Random Permutations')
+```
+
+(Don't forget to describe what I should be looking for and why)
+
+ANS: The dot plots before and after permutation can be distinguished. So we cannot think that x1 and x2 are independent.
+
+**Informal Question (optional, no points):** Approximately how much time did you spend on this assignment?
+
+About 8 hours.
